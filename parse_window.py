@@ -117,7 +117,6 @@ class ParserWindow(QWidget):
             with open(filename, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(["text", "mark"])
-
                 for chat in self.chat_list:
                     if self.radio_all.isChecked():
                         # Парсим все сообщения из чата
@@ -128,9 +127,21 @@ class ParserWindow(QWidget):
                         # Парсим с фильтрацией по слову
                         word = self.word_filter_input.text().strip()
                         if word:
-                            async for message in app.get_chat_history(chat, limit=count):
-                                if word.lower() in (message.text or "").lower():
-                                    writer.writerow([message.text or "", ""])
+                            counter = 0
+                            last_message_id = 0
+                            while counter < count:
+                                messages_found = False
+                                async for message in app.get_chat_history(chat, limit=10, offset_id=last_message_id):
+                                    messages_found = True
+                                    last_message_id = message.id
+                                    if message.text:
+                                        if word.lower() in message.text.lower():
+                                            writer.writerow([message.text, ""])
+                                            counter += 1
+                                    if counter >= count:
+                                        break
+                                if not messages_found:
+                                    break
 
                     elif self.radio_function.isChecked():
                         # Парсинг через search_messages
@@ -144,3 +155,5 @@ class ParserWindow(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка парсинга: {e}")
+        finally:
+            await app.stop()
